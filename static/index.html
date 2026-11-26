@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WB Mesh-Доставка — MVP (ТОП ИИ ПРО)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+  <!-- Header -->
+  <header class="bg-purple-900 text-white shadow">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 class="text-lg font-bold tracking-tight">WB Гибридный Кластерный Mesh — MVP</h1>
+        <p class="text-xs text-purple-200">RWB × ПГТУ • Номинация «ТОП ИИ ПРО» • Казанская агломерация (Хаб Зеленодольск)</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="/docs" target="_blank" class="px-3 py-1.5 text-xs bg-purple-700 hover:bg-purple-600 rounded font-medium">Swagger API (/docs)</a>
+        <button onclick="resetSeed()" class="px-3 py-1.5 text-xs bg-rose-600 hover:bg-rose-500 rounded font-medium">Сбросить демо-БД (Seed)</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-4 space-y-4">
+    <!-- Панель 5 сценариев демо -->
+    <section class="bg-white rounded-xl shadow-sm border border-purple-100 p-4">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <h2 class="text-sm font-bold text-purple-900 uppercase tracking-wide">Панель живого демо (5 обязательных сценариев)</h2>
+        <span id="cb-badge" class="text-xs px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-semibold">Circuit Breaker: Шаттлы активны</span>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2">
+        <button onclick="runDemo('/api/demo/scenario1')" class="p-2.5 text-left rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition">
+          <div class="text-xs font-bold text-emerald-900">1. Городской Mesh</div>
+          <div class="text-[11px] text-emerald-700">Milk-Run N=8, пломба, 42с</div>
+        </button>
+        <button onclick="runDemo('/api/demo/scenario2')" class="p-2.5 text-left rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition">
+          <div class="text-xs font-bold text-slate-900">2. Откат в Хаб</div>
+          <div class="text-[11px] text-slate-600">N=4&lt;7 и Зеленодольск 6км</div>
+        </button>
+        <button onclick="runDemo('/api/demo/scenario3?intact_seal=true')" class="p-2.5 text-left rounded-lg border border-teal-200 bg-teal-50 hover:bg-teal-100 transition">
+          <div class="text-xs font-bold text-teal-900">3а. Возврат на полку</div>
+          <div class="text-[11px] text-teal-700">Целая пломба → +1 шт.</div>
+        </button>
+        <button onclick="runDemo('/api/demo/scenario3?intact_seal=false')" class="p-2.5 text-left rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 transition">
+          <div class="text-xs font-bold text-amber-900">3б. Возврат брака</div>
+          <div class="text-[11px] text-amber-700">Вскрыта пломба → Хаб</div>
+        </button>
+        <button onclick="runDemo('/api/demo/scenario4')" class="p-2.5 text-left rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 transition">
+          <div class="text-xs font-bold text-rose-900">4. Сбой (Circuit Breaker)</div>
+          <div class="text-[11px] text-rose-700">Переброс + idempotency</div>
+        </button>
+        <button onclick="runDemo('/api/demo/scenario5?days=15')" class="p-2.5 text-left rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 transition">
+          <div class="text-xs font-bold text-indigo-900">5. Долгое хранение</div>
+          <div class="text-[11px] text-indigo-700">+15 дн. → 30-й автовывоз</div>
+        </button>
+      </div>
+      <div id="toast" class="hidden mt-3 p-3 rounded-lg text-xs font-medium bg-purple-50 border border-purple-200 text-purple-900"></div>
+    </section>
+
+    <!-- Навигация по 3 вкладкам -->
+    <div class="flex border-b border-slate-200 gap-2">
+      <button onclick="switchTab('pvz')" id="tab-btn-pvz" class="px-5 py-2.5 text-sm font-bold border-b-2 border-purple-700 text-purple-900">1. ПВЗ (Операции и Аналитика)</button>
+      <button onclick="switchTab('seller')" id="tab-btn-seller" class="px-5 py-2.5 text-sm font-medium text-slate-500 hover:text-purple-800">2. Продавец (FBS и Хранение)</button>
+      <button onclick="switchTab('shadow')" id="tab-btn-shadow" class="px-5 py-2.5 text-sm font-medium text-slate-500 hover:text-purple-800">3. Shadow Routing (500 заказов + P&L WB)</button>
+    </div>
+
+    <!-- ВКЛАДКА 1: ПВЗ -->
+    <section id="tab-pvz" class="space-y-4">
+      <!-- KPI ПВЗ -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div class="bg-white p-4 rounded-xl shadow-sm border">
+          <div class="text-xs text-slate-500">Загрузка подсобки 5 м² (лимит 80%)</div>
+          <div class="text-xl font-bold mt-1" id="pvz-cap-text">0 / 250 шт.</div>
+          <div class="w-full bg-slate-200 h-2 rounded-full mt-2 overflow-hidden">
+            <div id="pvz-cap-bar" class="bg-purple-600 h-2 rounded-full" style="width: 0%"></div>
+          </div>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border">
+          <div class="text-xs text-slate-500">Чистая прибыль ПВЗ (текущая сессия)</div>
+          <div class="text-xl font-bold text-emerald-700 mt-1" id="pvz-net">0 ₽</div>
+          <div class="text-[11px] text-slate-500 mt-1" id="pvz-breakdown">База: 0 | Бонусы: 0 | Штрафы: 0</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border">
+          <div class="text-xs text-slate-500">Прогноз дохода ПВЗ / мес (1 000 шт.)</div>
+          <div class="text-xl font-bold text-purple-800 mt-1" id="pvz-forecast">0 ₽</div>
+          <div class="text-[11px] text-emerald-700 mt-1">Критерий успеха: ≥ 20 000 ₽/мес</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border">
+          <div class="text-xs text-slate-500">Суммарная экономия WB в БД</div>
+          <div class="text-xl font-bold text-indigo-700 mt-1" id="wb-saving">0 ₽</div>
+          <div class="text-[11px] text-slate-500 mt-1" id="wb-orders-split">Mesh: 0 | Хаб: 0</div>
+        </div>
+      </div>
+
+      <!-- Создание заказа вручную -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border">
+        <h3 class="text-sm font-bold mb-3">Создать новый заказ и прогнать через Гибридный Роутер</h3>
+        <div class="grid grid-cols-1 md:grid-cols-6 gap-2 items-end">
+          <div class="md:col-span-2">
+            <label class="text-xs text-slate-500">Товар (SKU)</label>
+            <select id="ord-sku" class="w-full border rounded p-2 text-xs"></select>
+          </div>
+          <div>
+            <label class="text-xs text-slate-500">Сценарий</label>
+            <select id="ord-mode" class="w-full border rounded p-2 text-xs">
+              <option value="ZERO_LEG">Zero-Leg (тот же ПВЗ)</option>
+              <option value="MILK_RUN" selected>1-Hop Milk-Run</option>
+              <option value="SHUTTLE">1-Hop Шаттл</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs text-slate-500">Плечо до хаба (км)</label>
+            <input id="ord-dist" type="number" value="35" class="w-full border rounded p-2 text-xs" />
+          </div>
+          <div>
+            <label class="text-xs text-slate-500">Батч N (шт.)</label>
+            <input id="ord-batch" type="number" value="8" class="w-full border rounded p-2 text-xs" />
+          </div>
+          <button onclick="createOrderManual()" class="bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold py-2 px-3 rounded">Создать заказ</button>
+        </div>
+      </div>
+
+      <!-- Очередь заказов ПВЗ -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border overflow-x-auto">
+        <h3 class="text-sm font-bold mb-2">Очередь заказов (Сборка короба, Слот 60 сек, Выдача, Возврат)</h3>
+        <table class="w-full text-xs text-left">
+          <thead class="bg-slate-100 text-slate-600">
+            <tr>
+              <th class="p-2">Заказ / Товар</th>
+              <th class="p-2">Канал</th>
+              <th class="p-2">Вердикт роутера</th>
+              <th class="p-2">Экономика WB</th>
+              <th class="p-2">Статус / Пломба</th>
+              <th class="p-2">Действия ПВЗ</th>
+            </tr>
+          </thead>
+          <tbody id="orders-tbody" class="divide-y"></tbody>
+        </table>
+      </div>
+
+      <!-- Журнал транзакций -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border overflow-x-auto">
+        <h3 class="text-sm font-bold mb-2">Финансовый журнал (Ledger с защитой idempotency_key)</h3>
+        <table class="w-full text-xs text-left">
+          <thead class="bg-slate-100 text-slate-600">
+            <tr><th class="p-2">Сторона</th><th class="p-2">Категория</th><th class="p-2">Сумма</th><th class="p-2">Описание</th><th class="p-2">Idempotency Key</th></tr>
+          </thead>
+          <tbody id="tx-tbody" class="divide-y"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ВКЛАДКА 2: ПРОДАВЕЦ -->
+    <section id="tab-seller" class="hidden space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+        <div class="bg-white p-4 rounded-xl shadow-sm border">
+          <div class="text-xs text-slate-500">Выручка (выкупы)</div>
+          <div class="text-lg font-bold mt-1" id="sel-rev">0 ₽</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border">
+          <div class="text-xs text-slate-500">Логистика (со скидкой)</div>
+          <div class="text-lg font-bold text-slate-700 mt-1" id="sel-log">0 ₽</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border">
+          <div class="text-xs text-slate-500">Хранение (1 ₽ / ×2)</div>
+          <div class="text-lg font-bold text-amber-700 mt-1" id="sel-stor">0 ₽</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border">
+          <div class="text-xs text-slate-500">Возвраты и Автовывоз</div>
+          <div class="text-lg font-bold text-rose-700 mt-1" id="sel-evac">0 ₽</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border bg-emerald-50">
+          <div class="text-xs text-emerald-800 font-semibold">Чистая прибыль продавца</div>
+          <div class="text-xl font-bold text-emerald-800 mt-1" id="sel-net">0 ₽</div>
+        </div>
+      </div>
+
+      <!-- Приёмка от селлера (проверка 4 фильтров и офф-пик окна) -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border">
+        <h3 class="text-sm font-bold mb-3">Отгрузка партии FBS на Опорный ПВЗ (проверка 4 фильтров + окно 10:00–16:00)</h3>
+        <div class="grid grid-cols-2 md:grid-cols-7 gap-2 items-end">
+          <div><label class="text-xs text-slate-500">Артикул</label><input id="in-sku" value="SKU-KZN-105" class="w-full border rounded p-1.5 text-xs" /></div>
+          <div class="col-span-2"><label class="text-xs text-slate-500">Название</label><input id="in-name" value="Увлажнитель компакт (пломба)" class="w-full border rounded p-1.5 text-xs" /></div>
+          <div><label class="text-xs text-slate-500">Цена (≤5000)</label><input id="in-price" type="number" value="2490" class="w-full border rounded p-1.5 text-xs" /></div>
+          <div><label class="text-xs text-slate-500">Кол-во (шт.)</label><input id="in-qty" type="number" value="20" class="w-full border rounded p-1.5 text-xs" /></div>
+          <div><label class="text-xs text-slate-500">Час (10–16)</label><input id="in-hour" type="number" value="12" class="w-full border rounded p-1.5 text-xs" /></div>
+          <button onclick="intakeStock()" class="bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold py-2 px-3 rounded">Сдать на ПВЗ</button>
+        </div>
+      </div>
+
+      <!-- Остатки и неликвид -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border overflow-x-auto">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h3 class="text-sm font-bold">Сток на полке Опорного ПВЗ и контроль неликвида (1–14 / 15–29 ×2 / 30 автовывоз)</h3>
+          <div class="flex gap-2">
+            <button onclick="advanceDays(null, 5)" class="px-3 py-1 text-xs bg-slate-200 hover:bg-slate-300 rounded font-medium">+5 дней всем</button>
+            <button onclick="advanceDays(null, 15)" class="px-3 py-1 text-xs bg-amber-500 hover:bg-amber-600 text-white rounded font-medium">+15 дней всем (Автовывоз)</button>
+          </div>
+        </div>
+        <table class="w-full text-xs text-left">
+          <thead class="bg-slate-100 text-slate-600">
+            <tr>
+              <th class="p-2">SKU / Товар</th><th class="p-2">Цена</th><th class="p-2">Фильтры</th>
+              <th class="p-2">Доступно / Резерв</th><th class="p-2">Дней на полке</th><th class="p-2">Статус тарифа</th>
+            </tr>
+          </thead>
+          <tbody id="stock-tbody" class="divide-y"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ВКЛАДКА 3: SHADOW ROUTING (500 ЗАКАЗОВ) -->
+    <section id="tab-shadow" class="hidden space-y-4">
+      <div class="bg-white p-4 rounded-xl shadow-sm border">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h3 class="text-sm font-bold">Параметры финмодели (What-If ползунки в реальном времени)</h3>
+          <button onclick="runShadow()" class="bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold py-2 px-4 rounded-lg">Запустить Shadow Routing (500 заказов)</button>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          <div>
+            <label class="flex justify-between"><span>База доставки Хаба:</span><b id="v-hub">25 ₽</b></label>
+            <input id="s-hub" type="range" min="15" max="50" step="1" value="25" oninput="syncSliders()" class="w-full accent-purple-700" />
+          </div>
+          <div>
+            <label class="flex justify-between"><span>Рейс 1-Hop Milk-Run:</span><b id="v-mr">65 ₽</b></label>
+            <input id="s-mr" type="range" min="30" max="150" step="5" value="65" oninput="syncSliders()" class="w-full accent-purple-700" />
+          </div>
+          <div>
+            <label class="flex justify-between"><span>Рейс 1-Hop Шаттл:</span><b id="v-sh">215 ₽</b></label>
+            <input id="s-sh" type="range" min="100" max="400" step="5" value="215" oninput="syncSliders()" class="w-full accent-purple-700" />
+          </div>
+          <div>
+            <label class="flex justify-between"><span>Выплата Опорному ПВЗ (1-Hop):</span><b id="v-pvz">25 ₽</b></label>
+            <input id="s-pvz" type="range" min="15" max="40" step="1" value="25" oninput="syncSliders()" class="w-full accent-purple-700" />
+          </div>
+          <div>
+            <label class="flex justify-between"><span>Скидка FBS-селлеру:</span><b id="v-disc">10 ₽</b></label>
+            <input id="s-disc" type="range" min="0" max="25" step="1" value="10" oninput="syncSliders()" class="w-full accent-purple-700" />
+          </div>
+          <div>
+            <label class="flex justify-between"><span>Доля возвратов (%):</span><b id="v-ret">10%</b></label>
+            <input id="s-ret" type="range" min="0" max="30" step="1" value="10" oninput="syncSliders()" class="w-full accent-purple-700" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Результаты и критерии успеха -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3" id="shadow-kpis"></div>
+      <div class="flex flex-wrap gap-2" id="shadow-badges"></div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-white p-4 rounded-xl shadow-sm border"><canvas id="chart-cost" height="170"></canvas></div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border"><canvas id="chart-channels" height="170"></canvas></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    let costChart = null, chanChart = null;
+
+    function showToast(msg, isError = false) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = `mt-3 p-3 rounded-lg text-xs font-medium border ${isError ? 'bg-rose-50 border-rose-200 text-rose-900' : 'bg-purple-50 border-purple-200 text-purple-900'}`;
+      el.classList.remove('hidden');
+    }
+
+    function switchTab(name) {
+      ['pvz', 'seller', 'shadow'].forEach(t => {
+        document.getElementById(`tab-${t}`).classList.toggle('hidden', t !== name);
+        const btn = document.getElementById(`tab-btn-${t}`);
+        btn.className = t === name
+          ? 'px-5 py-2.5 text-sm font-bold border-b-2 border-purple-700 text-purple-900'
+          : 'px-5 py-2.5 text-sm font-medium text-slate-500 hover:text-purple-800';
+      });
+      if (name === 'shadow') runShadow();
+    }
+
+    async function api(url, method = 'GET', body = null) {
+      const opts = { method, headers: { 'Content-Type': 'application/json' } };
+      if (body) opts.body = JSON.stringify(body);
+      const res = await fetch(url, opts);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Ошибка запроса');
+      return data;
+    }
+
+    async function refreshState() {
+      const s = await api('/api/state');
+      // Circuit breaker badge
+      const cb = document.getElementById('cb-badge');
+      if (s.circuit_breaker_shuttle_broken) {
+        cb.textContent = 'Circuit Breaker: ШАТТЛ ОТКЛЮЧЁН → ХАБ (Нажми сброс)';
+        cb.className = 'text-xs px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 font-bold cursor-pointer';
+        cb.onclick = async () => { await api('/api/demo/scenario4/reset', 'POST'); showToast('Circuit Breaker сброшен'); refreshState(); };
+      } else {
+        cb.textContent = 'Circuit Breaker: Шаттлы активны';
+        cb.className = 'text-xs px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-semibold';
+        cb.onclick = null;
+      }
+
+      // PVZ KPIs
+      document.getElementById('pvz-cap-text').textContent = `${s.capacity.used_units} / ${s.capacity.working_limit} шт. (${s.capacity.load_pct}%)`;
+      document.getElementById('pvz-cap-bar').style.width = `${Math.min(100, s.capacity.load_pct)}%`;
+      document.getElementById('pvz-net').textContent = `${s.pvz_analytics.net_profit} ₽`;
+      document.getElementById('pvz-breakdown').textContent = `База: ${s.pvz_analytics.payouts} | Бонусы: +${s.pvz_analytics.bonuses} | Штрафы: ${s.pvz_analytics.penalties}`;
+      document.getElementById('pvz-forecast').textContent = `${s.pvz_analytics.monthly_forecast.toLocaleString('ru-RU')} ₽/мес`;
+      document.getElementById('wb-saving').textContent = `+${s.wb_analytics.total_saving} ₽`;
+      document.getElementById('wb-orders-split').textContent = `Mesh: ${s.wb_analytics.orders_mesh} | Хаб: ${s.wb_analytics.orders_hub}`;
+
+      // Seller KPIs
+      document.getElementById('sel-rev').textContent = `${s.seller_analytics.revenue} ₽`;
+      document.getElementById('sel-log').textContent = `${s.seller_analytics.logistics} ₽`;
+      document.getElementById('sel-stor').textContent = `${s.seller_analytics.storage} ₽`;
+      document.getElementById('sel-evac').textContent = `${(s.seller_analytics.evacuation + s.seller_analytics.returns).toFixed(2)} ₽`;
+      document.getElementById('sel-net').textContent = `${s.seller_analytics.net_profit} ₽`;
+
+      // SKU select
+      const sel = document.getElementById('ord-sku');
+      const prevVal = sel.value;
+      sel.innerHTML = s.stock.map(i => `<option value="${i.id}">${i.sku_code} — ${i.name} (ост: ${i.qty_available})</option>`).join('');
+      if (prevVal) sel.value = prevVal;
+
+      // Orders table
+      document.getElementById('orders-tbody').innerHTML = s.orders.map(o => {
+        const badge = o.routed_channel === 'HUB' ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-800';
+        let acts = '';
+        if (o.status === 'CREATED' && o.routed_channel !== 'HUB') {
+          acts += `<button onclick="orderAct(${o.id}, 'pack')" class="px-2 py-1 bg-purple-100 text-purple-800 rounded mr-1">Короб</button>`;
+        }
+        if ((o.status === 'PACKED' || o.status === 'CREATED') && o.routed_channel !== 'HUB') {
+          acts += `<button onclick="orderAct(${o.id}, 'handover', {handover_sec:45})" class="px-2 py-1 bg-emerald-100 text-emerald-800 rounded mr-1">≤60с</button>`;
+          acts += `<button onclick="orderAct(${o.id}, 'handover', {handover_sec:95})" class="px-2 py-1 bg-rose-100 text-rose-800 rounded mr-1">&gt;60с</button>`;
+        }
+        if (['CREATED', 'PACKED', 'HANDED_OVER'].includes(o.status)) {
+          acts += `<button onclick="orderAct(${o.id}, 'deliver')" class="px-2 py-1 bg-indigo-600 text-white rounded">Выдать</button>`;
+        }
+        if (o.status === 'DELIVERED') {
+          acts += `<button onclick="orderAct(${o.id}, 'return', {intact_seal:true,photo_confirmed:true})" class="px-2 py-1 bg-teal-100 text-teal-800 rounded mr-1">Возврат полка</button>`;
+          acts += `<button onclick="orderAct(${o.id}, 'return', {intact_seal:false,photo_confirmed:false})" class="px-2 py-1 bg-amber-100 text-amber-800 rounded">Возврат брак</button>`;
+        }
+        return `<tr>
+          <td class="p-2"><b>${o.order_number}</b><div class="text-[11px] text-slate-500">${o.sku_name}</div></td>
+          <td class="p-2"><span class="px-2 py-0.5 rounded font-bold ${badge}">${o.routed_channel}</span></td>
+          <td class="p-2 max-w-xs text-[11px]">${o.route_reason}</td>
+          <td class="p-2"><b>${o.wb_cost} ₽</b> vs ${o.hub_baseline_cost} ₽<div class="text-emerald-700 font-semibold">+${o.wb_saving} ₽</div></td>
+          <td class="p-2"><div>${o.status}</div><div class="text-[11px] text-purple-700">${o.seal_code || ''}</div></td>
+          <td class="p-2 whitespace-nowrap">${acts}</td>
+        </tr>`;
+      }).join('');
+
+      // Stock table
+      document.getElementById('stock-tbody').innerHTML = s.stock.map(i => {
+        const stColor = i.status === 'EVACUATED' ? 'bg-rose-100 text-rose-800' : (i.status === 'ALERT_15' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800');
+        const stLabel = i.status === 'EVACUATED' ? 'АВТОВЫВОЗ (30д)' : (i.status === 'ALERT_15' ? 'АЛЕРТ ×2 (2 ₽/дн)' : 'БАЗА (1 ₽/дн)');
+        return `<tr>
+          <td class="p-2"><b>${i.sku_code}</b> — ${i.name}</td>
+          <td class="p-2">${i.price} ₽</td>
+          <td class="p-2 text-[11px]">${i.is_whitelist && i.has_factory_seal && i.turnover_days <= 14 ? '✅ 4 фильтра OK' : '❌ Не подходит'}</td>
+          <td class="p-2"><b>${i.qty_available}</b> / ${i.qty_reserved}</td>
+          <td class="p-2 font-bold">${i.storage_days} дн.</td>
+          <td class="p-2"><span class="px-2 py-0.5 rounded text-[11px] font-bold ${stColor}">${stLabel}</span></td>
+        </tr>`;
+      }).join('');
+
+      // Ledger
+      document.getElementById('tx-tbody').innerHTML = s.transactions.map(t => `<tr>
+        <td class="p-2 font-bold">${t.actor}</td>
+        <td class="p-2">${t.category}</td>
+        <td class="p-2 font-bold ${t.amount >= 0 ? 'text-emerald-700' : 'text-rose-700'}">${t.amount >= 0 ? '+' : ''}${t.amount} ₽</td>
+        <td class="p-2">${t.description}</td>
+        <td class="p-2 font-mono text-[10px] text-slate-400">${t.idempotency_key}</td>
+      </tr>`).join('');
+    }
+
+    async function runDemo(url) {
+      try {
+        const r = await api(url, 'POST');
+        showToast(`${r.scenario}: ${r.details}`);
+        await refreshState();
+      } catch (e) { showToast(e.message, true); }
+    }
+
+    async function resetSeed() {
+      await api('/api/seed', 'POST');
+      showToast('Демо-БД сброшена к начальному состоянию');
+      await refreshState();
+    }
+
+    async function createOrderManual() {
+      try {
+        const r = await api('/api/orders', 'POST', {
+          stock_item_id: Number(document.getElementById('ord-sku').value),
+          requested_mode: document.getElementById('ord-mode').value,
+          distance_km: Number(document.getElementById('ord-dist').value),
+          batch_size: Number(document.getElementById('ord-batch').value),
+        });
+        showToast(`Заказ ${r.order_number} → ${r.routed_channel}: ${r.route_reason}`);
+        await refreshState();
+      } catch (e) { showToast(e.message, true); }
+    }
+
+    async function orderAct(id, action, payload = null) {
+      try {
+        const r = await api(`/api/orders/${id}/${action}`, 'POST', payload);
+        showToast(r.message);
+        await refreshState();
+      } catch (e) { showToast(e.message, true); }
+    }
+
+    async function intakeStock() {
+      try {
+        const r = await api('/api/stock/intake', 'POST', {
+          sku_code: document.getElementById('in-sku').value,
+          name: document.getElementById('in-name').value,
+          price: Number(document.getElementById('in-price').value),
+          qty: Number(document.getElementById('in-qty').value),
+          current_hour: Number(document.getElementById('in-hour').value),
+        });
+        showToast(r.message);
+        await refreshState();
+      } catch (e) { showToast(e.message, true); }
+    }
+
+    async function advanceDays(id, days) {
+      try {
+        const r = await api('/api/storage/advance', 'POST', { stock_item_id: id, days });
+        showToast(r.message);
+        await refreshState();
+      } catch (e) { showToast(e.message, true); }
+    }
+
+    function syncSliders() {
+      document.getElementById('v-hub').textContent = document.getElementById('s-hub').value + ' ₽';
+      document.getElementById('v-mr').textContent = document.getElementById('s-mr').value + ' ₽';
+      document.getElementById('v-sh').textContent = document.getElementById('s-sh').value + ' ₽';
+      document.getElementById('v-pvz').textContent = document.getElementById('s-pvz').value + ' ₽';
+      document.getElementById('v-disc').textContent = document.getElementById('s-disc').value + ' ₽';
+      document.getElementById('v-ret').textContent = document.getElementById('s-ret').value + '%';
+    }
+
+    async function runShadow() {
+      const r = await api('/api/shadow-routing', 'POST', {
+        n_orders: 500,
+        hub_delivery_base: Number(document.getElementById('s-hub').value),
+        milk_run_trip_cost: Number(document.getElementById('s-mr').value),
+        shuttle_trip_cost: Number(document.getElementById('s-sh').value),
+        pvz_payout_1hop: Number(document.getElementById('s-pvz').value),
+        seller_discount_mesh: Number(document.getElementById('s-disc').value),
+        return_rate: Number(document.getElementById('s-ret').value) / 100.0,
+      });
+
+      document.getElementById('shadow-kpis').innerHTML = `
+        <div class="bg-white p-4 rounded-xl border"><div class="text-xs text-slate-500">Blended Unit Cost (500 зак.)</div><div class="text-xl font-bold text-purple-900">${r.blended_unit_cost_hybrid} ₽ <span class="text-xs text-slate-400 line-through">${r.blended_unit_cost_hub} ₽</span></div><div class="text-xs text-emerald-700 font-bold">−${r.blended_saving_pct}% по потоку</div></div>
+        <div class="bg-white p-4 rounded-xl border"><div class="text-xs text-slate-500">Экономия на Mesh-сегменте</div><div class="text-xl font-bold text-emerald-700">−${r.segment_saving_pct}%</div><div class="text-xs text-slate-500">Экономия: +${r.total_saving_500_orders.toLocaleString('ru-RU')} ₽</div></div>
+        <div class="bg-white p-4 rounded-xl border"><div class="text-xs text-slate-500">Пороги N_min (Казань 35 км)</div><div class="text-lg font-bold">Milk-Run: ${r.thresholds_at_35km.n_min_milk_run ?? '∞'} | Шаттл: ${r.thresholds_at_35km.n_min_shuttle ?? '∞'}</div><div class="text-xs text-slate-500">База Хаба: ${r.thresholds_at_35km.hub_cost_35km} ₽</div></div>
+        <div class="bg-white p-4 rounded-xl border"><div class="text-xs text-slate-500">Прогноз дохода Опорного ПВЗ</div><div class="text-xl font-bold text-indigo-700">${r.pvz_monthly_income_forecast.toLocaleString('ru-RU')} ₽/мес</div><div class="text-xs text-slate-500">Убыточных рейсов: ${r.unprofitable_trips}</div></div>
+      `;
+
+      const b = (ok, label) => `<span class="px-3 py-1 rounded-full text-xs font-bold ${ok ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">${ok ? '✅' : '❌'} ${label}</span>`;
+      document.getElementById('shadow-badges').innerHTML =
+        b(r.criteria.saving_ge_15pct, 'Экономия сегмента ≥ 15%') +
+        b(r.criteria.pvz_ge_20k, 'Доход ПВЗ ≥ 20 000 ₽/мес') +
+        b(r.criteria.zero_unprofitable, '0% убыточных рейсов') +
+        b(r.criteria.zero_sla_drop, '0% просадки SLA');
+
+      if (costChart) costChart.destroy();
+      costChart = new Chart(document.getElementById('chart-cost'), {
+        type: 'bar',
+        data: {
+          labels: ['Только Хаб (Baseline)', 'Гибридный Mesh'],
+          datasets: [{ label: 'Blended Unit Cost (₽/заказ)', data: [r.blended_unit_cost_hub, r.blended_unit_cost_hybrid], backgroundColor: ['#94a3b8', '#7e22ce'] }]
+        },
+        options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+      });
+
+      if (chanChart) chanChart.destroy();
+      chanChart = new Chart(document.getElementById('chart-channels'), {
+        type: 'doughnut',
+        data: {
+          labels: ['Zero-Leg', '1-Hop Milk-Run', '1-Hop Шаттл', 'Откат → Хаб'],
+          datasets: [{ data: [r.channels.ZERO_LEG, r.channels.MILK_RUN, r.channels.SHUTTLE, r.channels.HUB], backgroundColor: ['#10b981', '#7e22ce', '#a855f7', '#94a3b8'] }]
+        }
+      });
+    }
+
+    refreshState();
+  </script>
+</body>
+</html>
